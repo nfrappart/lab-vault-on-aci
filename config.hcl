@@ -7,6 +7,8 @@ listener "tcp" {
 storage "file" {
   path = "/vault/file"
 }
+seal "azurekeyvault" {
+}
 
 ui = true
 
