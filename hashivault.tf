@@ -30,29 +30,82 @@ resource "azurerm_storage_share" "vaultbackend-share" {
   quota                = "50"
 }
 
+
+###########################
+# Create self signed cert #
+###########################
+
+resource "tls_private_key" "vault-tls-key" {
+  algorithm = "RSA"
+  rsa_bits = 4096
+}
+
+resource "tls_self_signed_cert" "vault-tls-cert" {
+  key_algorithm   = tls_private_key.vault-tls-key.algorithm
+  private_key_pem = tls_private_key.vault-tls-key.private_key_pem
+
+  validity_period_hours = 87600
+  
+  allowed_uses = [
+      "key_encipherment",
+      "digital_signature",
+      "server_auth",
+  ]
+
+  dns_names = ["vault-${local.company}.${azurerm_resource_group.rg-vault-eu.location}.azurecontainer.io"]
+
+  subject {
+      common_name  = "vault-${local.company}.${azurerm_resource_group.rg-vault-eu.location}.azurecontainer.io"
+      organization = "Capsule Corps."
+  }
+}
+
+resource "local_file" "vault-key" {
+    content     = tls_private_key.vault-tls-key.private_key_pem
+    filename = "${path.module}/vault.key"
+} 
+
+resource "local_file" "vault-cert" {
+    content     = tls_self_signed_cert.vault-tls-cert.cert_pem
+    filename = "${path.module}/vault.crt"
+} 
+
 ############################
 # Upload vault config file #
 ############################
 
+variable "filelist" {
+  default = [
+    "vault.key",
+    "vault.crt",
+    "config.hcl",
+  ]
+}
+
 resource "null_resource" "uploadvaultconfig" {
+  for_each = toset(var.filelist)
   provisioner "local-exec" {
-    command = "az storage file upload --account-key '${azurerm_storage_account.vaultbackend.primary_access_key}' --account-name '${azurerm_storage_account.vaultbackend.name}' --share-name '${azurerm_storage_share.vaultbackend-share["config"].name}' --source config.hcl"
+    command = "az storage file upload --account-key '${azurerm_storage_account.vaultbackend.primary_access_key}' --account-name '${azurerm_storage_account.vaultbackend.name}' --share-name '${azurerm_storage_share.vaultbackend-share["config"].name}' --source ${each.value}" #config.hcl"
     #interpreter = ["Bash", "-Command"]
   }
   depends_on = [
     azurerm_storage_share.vaultbackend-share,
+    local_file.vault-key,
+    local_file.vault-cert,
   ]
 }
+
+
 ################################
 # Container Instance for Vault #
 ################################
 
-resource "azurerm_container_group" "vault-ryzhom" {
-  name                = "vault-ryzhom"
+resource "azurerm_container_group" "vault-aci" {
+  name                = local.vault-name#"vault-${local.company}"
   location            = azurerm_resource_group.rg-vault-eu.location
   resource_group_name = azurerm_resource_group.rg-vault-eu.name
   ip_address_type     = "public"
-  dns_name_label      = "vault-ryzhom"
+  dns_name_label      = local.vault-name#"vault-${local.company}"
   os_type             = "Linux"
 
   identity  {
@@ -63,7 +116,7 @@ resource "azurerm_container_group" "vault-ryzhom" {
   }
 
   container {
-    name   = "vault-ryzhom"
+    name   = local.vault-name#"vault-${local.company}"
     image  = "vault:1.6.2"
     cpu    = "1"
     memory = "2"
@@ -96,14 +149,20 @@ resource "azurerm_container_group" "vault-ryzhom" {
   depends_on = [
     azurerm_storage_share.vaultbackend-share,
     null_resource.uploadvaultconfig,
+    azurerm_key_vault_key.hashivault-key,
   ]
   
 }
 
-output "environment_variables" {
-    value = <<EOF
-export VAULT_ADDR="http://vault-ryzhom.${azurerm_resource_group.rg-vault-eu.location}.azurecontainer.io:8200"
-export VAULT_SKIP_VERIFY=true
-EOF
+output "To-Configure-Vault-Address" {
+    value = "export VAULT_ADDR=https://${local.vault-name}.${azurerm_resource_group.rg-vault-eu.location}.azurecontainer.io:8200"
+}
+
+output "To-Ignore-SelfSigned-Certs" {
+  value = "export VAULT_SKIP_VERIFY=true"
+}
+
+output "To-Initialize-Vault" {
+  value = "vault operator init -recovery-shares=1 -recovery-threshold=1"
 }
 

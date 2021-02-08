@@ -10,3 +10,10 @@
 
 # .old temp files
 *.old
+
+# certificate files
+*.crt
+*.key
+
+# lock file
+*.lock.hcl

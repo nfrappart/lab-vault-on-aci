@@ -13,7 +13,13 @@ terraform {
 data "azurerm_client_config" "current_config" {}
 
 locals {
-  company = "ryzhom"
+  company = "bulma${random_integer.id.result}"
+  vault-name = "vault-bulma${random_integer.id.result}"
+}
+
+resource "random_integer" "id" {
+  min     = 100
+  max     = 999
 }
 
 # Vault Resource Group

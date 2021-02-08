@@ -1,7 +1,7 @@
 # Azure Keyvault for Hashicorp Vault Key
 module "kv-vault-eu" {
   source = "github.com/nfrappart/azTerraKeyvault?ref=v1.0.2"
-  KeyVaultName = "kv-hashivault-${local.company}-eu"
+  KeyVaultName = "kv-${local.company}"
   KeyVaultRgName = azurerm_resource_group.rg-vault-eu.name
   KeyVaultTenantID = data.azurerm_client_config.current_config.tenant_id
   ProvisioningDateTag = timestamp()
