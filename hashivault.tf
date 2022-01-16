@@ -101,11 +101,11 @@ resource "null_resource" "uploadvaultconfig" {
 ################################
 
 resource "azurerm_container_group" "vault-aci" {
-  name                = local.vault-name#"vault-${local.company}"
+  name                = local.vault-name
   location            = azurerm_resource_group.rg-vault-eu.location
   resource_group_name = azurerm_resource_group.rg-vault-eu.name
   ip_address_type     = "public"
-  dns_name_label      = local.vault-name#"vault-${local.company}"
+  dns_name_label      = local.vault-name
   os_type             = "Linux"
 
   identity  {
@@ -116,8 +116,8 @@ resource "azurerm_container_group" "vault-aci" {
   }
 
   container {
-    name   = local.vault-name#"vault-${local.company}"
-    image  = "vault:1.6.2"
+    name   = local.vault-name
+    image  = "vault:1.9.2"#"vault:1.6.2"
     cpu    = "1"
     memory = "2"
 
@@ -140,10 +140,10 @@ resource "azurerm_container_group" "vault-aci" {
       "vault", "server", "-config=/vault/config/config.hcl" 
     ]
     environment_variables = {
-      #"VAULT_LOCAL_CONFIG" = "{\"backend\": {\"file\": {\"path\": \"/vault/file\"}}, \"default_lease_ttl\": \"168h\", \"max_lease_ttl\": \"720h\"}",
       "AZURE_TENANT_ID" = data.azurerm_client_config.current_config.tenant_id,
       "VAULT_AZUREKEYVAULT_VAULT_NAME" = module.kv-vault-eu.Name,
       "VAULT_AZUREKEYVAULT_KEY_NAME" = azurerm_key_vault_key.hashivault-key.name,
+      "VAULT_SKIP_VERIFY" = true,
     }
   }
   depends_on = [
@@ -163,6 +163,6 @@ output "To-Ignore-SelfSigned-Certs" {
 }
 
 output "To-Initialize-Vault" {
-  value = "vault operator init -recovery-shares=1 -recovery-threshold=1"
+  value = "vault operator init -recovery-shares=3 -recovery-threshold=2"
 }
 
